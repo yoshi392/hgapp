@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>聖書箇所表示APP</title>
+  <script src="https://cdn.jsdelivr.net/npm/jszip/dist/jszip.min.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+    }
+    .file-list {
+      margin-top: 20px;
+      font-size: 14px;
+      color: #555;
+    }
+    .output-section {
+      margin-top: 20px;
+    }
+    .section-title {
+      font-weight: bold;
+      margin-bottom: 10px;
+    }
+    .verse {
+      margin-left: 20px;
+      margin-bottom: 10px;
+      line-height: 1.6;
+    }
+  </style>
+</head>
+<body>
+  <h1>聖書箇所表示APP</h1>
+  <input type="file" id="fileInput" />
+  <div id="fileNames" class="file-list"></div>
+  <div id="output" class="output-section"></div>
+
+  <script>
+    document.getElementById('fileInput').addEventListener('change', async (event) => {
+      const file = event.target.files[0];
+      if (!file) {
+        alert('ファイルを選択してください');
+        return;
+      }
+
+      const zip = new JSZip();
+      const outputDiv = document.getElementById('output');
+      const fileNamesDiv = document.getElementById('fileNames');
+      outputDiv.innerHTML = '解析中...';
+      fileNamesDiv.innerHTML = '';
+
+      try {
+        if (file.name.endsWith('.bdsc')) {
+          // .bdsc ファイルを直接処理
+          const fileContent = await file.text();
+          const parser = new DOMParser();
+          const xmlDoc = parser.parseFromString(fileContent, 'application/xml');
+
+          let outputHTML = '';
+          let previousYakuText = '';
+          let previousShouIndex = '';
+
+          const scenes = xmlDoc.getElementsByTagName('scene');
+          if (scenes.length === 0) {
+            console.warn(`'scene' タグが見つかりません: ${file.name}`);
+          } else {
+            for (const scene of scenes) {
+              const yakuText = scene.getAttribute('YakuText') || 'N/A';
+              const shouIndex = scene.getAttribute('ShouIndex') || 'N/A';
+              const positionText = scene.getAttribute('PositionText') || 'N/A';
+              const mainMessage = scene.getAttribute('MainMessage') || 'N/A';
+
+              if (shouIndex !== previousShouIndex) {
+                if (outputHTML) {
+                  outputHTML += '<br>'; // 章が変わるごとに改行
+                }
+                outputHTML += `<div class="section-title">${yakuText}</div>`;
+                previousShouIndex = shouIndex;
+                previousYakuText = yakuText;
+              } else if (yakuText !== previousYakuText) {
+                outputHTML += `<div class="section-title">${yakuText}</div>`;
+                previousYakuText = yakuText;
+              }
+
+              outputHTML += `<div class="verse">${positionText}<br>  ${mainMessage}</div>`;
+            }
+          }
+
+          outputDiv.innerHTML = outputHTML || 'データが見つかりませんでした。';
+          return;
+        }
+
+        // ZIPファイルを読み込む
+        const zipContent = await zip.loadAsync(file);
+        fileNamesDiv.innerHTML = '<strong>解析対象のファイル:</strong><ul>';
+
+        let outputHTML = '';
+        let previousYakuText = '';
+        let previousShouIndex = '';
+
+        for (const filename of Object.keys(zipContent.files)) {
+          fileNamesDiv.innerHTML += `<li>${filename}</li>`; // ファイル名をリスト表示
+
+          if (filename.endsWith('.xml') || filename.endsWith('.bdsc')) {
+            const fileContent = await zipContent.files[filename].async('string');
+            const parser = new DOMParser();
+            const xmlDoc = parser.parseFromString(fileContent, 'application/xml');
+
+            const scenes = xmlDoc.getElementsByTagName('scene');
+            if (scenes.length === 0) {
+              console.warn(`'scene' タグが見つかりません: ${filename}`);
+              continue;
+            }
+
+            for (const scene of scenes) {
+              const yakuText = scene.getAttribute('YakuText') || 'N/A';
+              const shouIndex = scene.getAttribute('ShouIndex') || 'N/A';
+              const positionText = scene.getAttribute('PositionText') || 'N/A';
+              const mainMessage = scene.getAttribute('MainMessage') || 'N/A';
+
+              if (shouIndex !== previousShouIndex) {
+                if (outputHTML) {
+                  outputHTML += '<br>'; // 章が変わるごとに改行
+                }
+                outputHTML += `<div class="section-title">${yakuText}</div>`;
+                previousShouIndex = shouIndex;
+                previousYakuText = yakuText;
+              } else if (yakuText !== previousYakuText) {
+                outputHTML += `<div class="section-title">${yakuText}</div>`;
+                previousYakuText = yakuText;
+              }
+
+              outputHTML += `<div class="verse">${positionText}<br>  ${mainMessage}</div>`;
+            }
+          }
+        }
+
+        fileNamesDiv.innerHTML += '</ul>';
+        outputDiv.innerHTML = outputHTML || 'データが見つかりませんでした。';
+
+      } catch (error) {
+        console.error('エラー:', error);
+        outputDiv.innerHTML = 'エラーが発生しました。ZIPファイルまたはXMLデータを確認してください。';
+      }
+    });
+  </script>
+</body>
+</html>
